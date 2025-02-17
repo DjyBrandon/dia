@@ -44,7 +44,7 @@ class Brain():
         # wheels not moving - no movement - no response to light
 
         # t4: battery attribute of mobile robot ————————————————————————————————————————————————————————————————————————
-        print(f"current battery: {self.batteryLevel} %")
+        print(f"current battery: {round(self.batteryLevel, 1)} %")
         self.batteryLevel -= 0.1   # battery consumption rate
         distance_to_charger, charger_pos = self.findNearestCharger(passiveObjects)
         if self.batteryLevel <= 0:
@@ -55,7 +55,7 @@ class Brain():
             if self.batteryLevel < (required_battery + 20):
                 self.seekCharger = True
         if self.seekCharger:  # move to the charger when at the seekCharger mode
-            cx, cy = charger_pos  # assume the position of charger is fixed
+            cx, cy = charger_pos  # the position of charger
             angle = math.atan2(cy - y, cx - x)
             speedLeft = 3.0 + math.sin(angle - self.bot.theta)
             speedRight = 3.0 - math.sin(angle - self.bot.theta)
@@ -66,6 +66,7 @@ class Brain():
                     self.seekCharger = False  # enough battery then quit the seek charger mode
             return speedLeft, speedRight, None, None
         # ——————————————————————————————————————————————————————————————————————————————————————————————————————————————
+
         else:
             # t1: move the mobile robot to the light, t5: second form heater ———————————————————————————————————————————
             # speedLeft = 5
@@ -143,7 +144,6 @@ class Bot():
                 heatL += 200000 / (distanceL * distanceL)
                 heatR += 200000 / (distanceR * distanceR)
         return heatL, heatR
-
     # ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
     # what happens at each timestep
@@ -260,8 +260,8 @@ class Lamp():
 # t4: battery attribute of mobile robot ————————————————————————————————————————————————————————————————————————————————
 class Charger():
     def __init__(self, namep):
-        self.centreX = 500
-        self.centreY = 500
+        self.centreX = random.randint(100, 900)
+        self.centreY = random.randint(100, 900)
         self.name = namep
 
     def draw(self, canvas):
@@ -271,8 +271,6 @@ class Charger():
 
     def getLocation(self):
         return self.centreX, self.centreY
-
-
 # ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
 
