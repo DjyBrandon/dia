@@ -19,10 +19,14 @@ class Brain():
     # modify this to change the robot's behaviour
     def thinkAndAct(self, lightL, lightR, x, y, sl, sr):
         # wheels not moving - no movement - no response to light
+        # t1: move the mobile robot to the light ———————————————————————————————————————————————————————————————————————
         # speedLeft = 5
         # speedRight = 5
-        speedLeft = lightL / 100.0  # t1: 让机器人的速度与光传感器的值成比例，move to light
-        speedRight = lightR / 100.0
+        base_speed = 2.0  # basic speed
+        turn_factor = 0.1  # turn factor, close to light, -0.1 represents far away from light
+        speedLeft = base_speed + (lightR - lightL) * turn_factor
+        speedRight = base_speed + (lightL - lightR) * turn_factor
+        # ——————————————————————————————————————————————————————————————————————————————————————————————————————————————
         newX = None
         newY = None
         return speedLeft, speedRight, newX, newY
@@ -208,7 +212,7 @@ def main():
     canvas = initialise(window)  # •	Creates a window to display the scene
     # This consists of two lists. agents is a list of things that move (e.g. robots),
     # and passiveObjects is a list of things that don’t move (e.g. lights, charging stations, barriers)
-    agents, passiveObjects = createObjects(canvas, noOfBots=2, noOfLights=2)
+    agents, passiveObjects = createObjects(canvas, noOfBots=1, noOfLights=1)
     moveIt(canvas, agents, passiveObjects)
     window.mainloop()  # update the windows
 
