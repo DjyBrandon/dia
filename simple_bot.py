@@ -22,7 +22,7 @@ class Brain():
         # ——————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
     # modify this to change the robot's behaviour
-    def thinkAndAct(self, lightL, lightR, x, y, sl, sr):
+    def thinkAndAct(self, lightL, lightR, x, y, sl, sr, heatL, heatR):  # t5
         # wheels not moving - no movement - no response to light
 
         # t4: battery attribute of mobile robot ————————————————————————————————————————————————————————————————————————
@@ -47,13 +47,14 @@ class Brain():
             return speedLeft, speedRight, None, None
         # ——————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
-        # t1: move the mobile robot to the light ———————————————————————————————————————————————————————————————————————
+        # t1: move the mobile robot to the light, t5: second form heater ———————————————————————————————————————————————
         # speedLeft = 5
         # speedRight = 5
         base_speed = 2.0  # basic speed
-        turn_factor = 0.1  # turn factor, close to light, -0.1 represents far away from light
-        speedLeft = base_speed + (lightR - lightL) * turn_factor
-        speedRight = base_speed + (lightL - lightR) * turn_factor
+        light_turn_factor = 0.1  # light turn factor, close to light, -0.1 represents away from light
+        heat_turn_factor = 0.1  # heater turn factor, away from heat, 0.1 represents close to heat
+        speedLeft = base_speed + (lightR - lightL) * light_turn_factor + (heatR - heatL) * heat_turn_factor
+        speedRight = base_speed + (lightL - lightR) * light_turn_factor + (heatL - heatR) * heat_turn_factor
         # ——————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
         # t2: restrict the speed of mobile robot ———————————————————————————————————————————————————————————————————————
@@ -83,7 +84,9 @@ class Bot():
 
     def thinkAndAct(self, agents, passiveObjects):
         lightL, lightR = self.senseLight(passiveObjects)
-        self.sl, self.sr, xx, yy = self.brain.thinkAndAct(lightL, lightR, self.x, self.y, self.sl, self.sr)
+        heatL, heatR = self.senseHeat(passiveObjects)  # t5
+        self.sl, self.sr, xx, yy = self.brain.thinkAndAct(lightL, lightR, self.x, self.y, self.sl, self.sr, heatL,
+                                                          heatR)  # t5
         if xx != None:
             self.x = xx
         if yy != None:
@@ -107,6 +110,23 @@ class Bot():
                 lightL += 200000 / (distanceL * distanceL)
                 lightR += 200000 / (distanceR * distanceR)
         return lightL, lightR
+
+    # t5: second form heater ———————————————————————————————————————————————————————————————————————————————————————————
+    def senseHeat(self, passiveObjects):
+        heatL = 0.0
+        heatR = 0.0
+        for pp in passiveObjects:
+            if isinstance(pp, Heater):
+                hx, hy = pp.getLocation()
+                distanceL = math.sqrt((hx - self.sensorPositions[0]) * (hx - self.sensorPositions[0]) + \
+                                      (hy - self.sensorPositions[1]) * (hy - self.sensorPositions[1]))
+                distanceR = math.sqrt((hx - self.sensorPositions[2]) * (hx - self.sensorPositions[2]) + \
+                                      (hy - self.sensorPositions[3]) * (hy - self.sensorPositions[3]))
+                heatL += 200000 / (distanceL * distanceL)
+                heatR += 200000 / (distanceR * distanceR)
+        return heatL, heatR
+
+    # ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
     # what happens at each timestep
     def update(self, canvas, dt):
@@ -233,6 +253,27 @@ class Charger():
 
     def getLocation(self):
         return self.centreX, self.centreY
+
+
+# ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+
+
+# t5: second form heater ————————————————————————————————————————————————————————————————————————————————
+class Heater():
+    def __init__(self, namep):
+        self.centreX = random.randint(100, 900)
+        self.centreY = random.randint(100, 900)
+        self.name = namep
+
+    def draw(self, canvas):
+        body = canvas.create_oval(self.centreX - 10, self.centreY - 10, \
+                                  self.centreX + 10, self.centreY + 10, \
+                                  fill="red", tags=self.name)
+
+    def getLocation(self):
+        return self.centreX, self.centreY
+
+
 # ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
 
@@ -250,7 +291,7 @@ def buttonClicked(x, y, agents):
             rr.y = y
 
 
-def createObjects(canvas, noOfBots, noOfLights, noOfChargers):  # t4: battery attribute of mobile robot
+def createObjects(canvas, noOfBots, noOfLights, noOfChargers, noOfHeaters):  # t4, t5
     agents = []
     passiveObjects = []
     for i in range(0, noOfBots):
@@ -271,6 +312,13 @@ def createObjects(canvas, noOfBots, noOfLights, noOfChargers):  # t4: battery at
         charger.draw(canvas)
     # ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
+    # t5: second form heater ———————————————————————————————————————————————————————————————————————————————————————————
+    for i in range(0, noOfHeaters):
+        heater = Heater("Heater" + str(i))
+        passiveObjects.append(Heater)
+        heater.draw(canvas)
+    # ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+
     canvas.bind("<Button-1>", lambda event: buttonClicked(event.x, event.y, agents))
     return agents, passiveObjects
 
@@ -287,7 +335,7 @@ def main():
     canvas = initialise(window)  # •	Creates a window to display the scene
     # This consists of two lists. agents is a list of things that move (e.g. robots),
     # and passiveObjects is a list of things that don’t move (e.g. lights, charging stations, barriers)
-    agents, passiveObjects = createObjects(canvas, noOfBots=1, noOfLights=1, noOfChargers=1)  # t4
+    agents, passiveObjects = createObjects(canvas, noOfBots=1, noOfLights=1, noOfChargers=1, noOfHeaters=1)  # t4, t5
     moveIt(canvas, agents, passiveObjects)
     window.mainloop()  # update the windows
 
