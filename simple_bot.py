@@ -16,9 +16,36 @@ class Brain():
     def __init__(self, botp):
         self.bot = botp
 
+        # t4: battery attribute of mobile robot ————————————————————————————————————————————————————————————————————————
+        self.batteryLevel = 100  # initialise battery capacity
+        self.seekCharger = False  # is seek charger mode ?
+        # ——————————————————————————————————————————————————————————————————————————————————————————————————————————————
+
     # modify this to change the robot's behaviour
     def thinkAndAct(self, lightL, lightR, x, y, sl, sr):
         # wheels not moving - no movement - no response to light
+
+        # t4: battery attribute of mobile robot ————————————————————————————————————————————————————————————————————————
+        print(f"current battery: {self.batteryLevel} %")
+        if self.bot.step_count % 5 == 0:  # battery capacity decreasing for every 5 calls
+            self.batteryLevel -= 1
+        if self.batteryLevel <= 0:
+            self.batteryLevel = 0
+            return 0, 0, None, None  # stop move when out of battery
+        if self.batteryLevel < 30:  # seek charger when low battery
+            self.seekCharger = True
+        if self.seekCharger:  # move to the charger when at the seekCharger mode
+            chargerX, chargerY = 500, 500  # assume the position of charger is fixed
+            angle_to_charger = math.atan2(chargerY - y, chargerX - x)
+            speedLeft = 2.0 + math.sin(angle_to_charger - self.bot.theta)
+            speedRight = 2.0 - math.sin(angle_to_charger - self.bot.theta)
+            # charge when arrive the charger
+            if abs(x - chargerX) < 10 and abs(y - chargerY) < 10:
+                self.batteryLevel += 10
+                if self.batteryLevel >= 100:
+                    self.seekCharger = False  # enough battery then quit the seek charger mode
+            return speedLeft, speedRight, None, None
+        # ——————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
         # t1: move the mobile robot to the light ———————————————————————————————————————————————————————————————————————
         # speedLeft = 5
@@ -52,6 +79,7 @@ class Bot():
         self.ll = 60  # axle width
         self.sl = 0.0
         self.sr = 0.0
+        self.step_count = 0  # t4: add step count
 
     def thinkAndAct(self, agents, passiveObjects):
         lightL, lightR = self.senseLight(passiveObjects)
@@ -60,6 +88,7 @@ class Bot():
             self.x = xx
         if yy != None:
             self.y = yy
+        self.step_count += 1  # t4: add step count
 
     def setBrain(self, brainp):
         self.brain = brainp
@@ -190,6 +219,23 @@ class Lamp():
         return self.centreX, self.centreY
 
 
+# t4: battery attribute of mobile robot ————————————————————————————————————————————————————————————————————————————————
+class Charger():
+    def __init__(self, namep):
+        self.centreX = 500
+        self.centreY = 500
+        self.name = namep
+
+    def draw(self, canvas):
+        body = canvas.create_oval(self.centreX - 10, self.centreY - 10, \
+                                  self.centreX + 10, self.centreY + 10, \
+                                  fill="green", tags=self.name)
+
+    def getLocation(self):
+        return self.centreX, self.centreY
+# ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+
+
 def initialise(window):
     window.resizable(False, False)
     canvas = tk.Canvas(window, width=1000, height=1000)
@@ -204,7 +250,7 @@ def buttonClicked(x, y, agents):
             rr.y = y
 
 
-def createObjects(canvas, noOfBots, noOfLights):
+def createObjects(canvas, noOfBots, noOfLights, noOfChargers):  # t4: battery attribute of mobile robot
     agents = []
     passiveObjects = []
     for i in range(0, noOfBots):
@@ -217,6 +263,14 @@ def createObjects(canvas, noOfBots, noOfLights):
         lamp = Lamp("Lamp" + str(i))
         passiveObjects.append(lamp)
         lamp.draw(canvas)
+
+    # t4: battery attribute of mobile robot ————————————————————————————————————————————————————————————————————————————
+    for i in range(0, noOfChargers):
+        charger = Charger("Charger" + str(i))
+        passiveObjects.append(Charger)
+        charger.draw(canvas)
+    # ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+
     canvas.bind("<Button-1>", lambda event: buttonClicked(event.x, event.y, agents))
     return agents, passiveObjects
 
@@ -233,7 +287,7 @@ def main():
     canvas = initialise(window)  # •	Creates a window to display the scene
     # This consists of two lists. agents is a list of things that move (e.g. robots),
     # and passiveObjects is a list of things that don’t move (e.g. lights, charging stations, barriers)
-    agents, passiveObjects = createObjects(canvas, noOfBots=1, noOfLights=1)
+    agents, passiveObjects = createObjects(canvas, noOfBots=1, noOfLights=1, noOfChargers=1)  # t4
     moveIt(canvas, agents, passiveObjects)
     window.mainloop()  # update the windows
 
