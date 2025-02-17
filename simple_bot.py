@@ -19,6 +19,7 @@ class Brain():
     # modify this to change the robot's behaviour
     def thinkAndAct(self, lightL, lightR, x, y, sl, sr):
         # wheels not moving - no movement - no response to light
+
         # t1: move the mobile robot to the light ———————————————————————————————————————————————————————————————————————
         # speedLeft = 5
         # speedRight = 5
@@ -34,6 +35,7 @@ class Brain():
         speedLeft = max(min(speedLeft, max_speed), min_speed)  # min <= speed <= max
         speedRight = max(min(speedRight, max_speed), min_speed)  # min <= speed <= max
         # ——————————————————————————————————————————————————————————————————————————————————————————————————————————————
+
         newX = None
         newY = None
         return speedLeft, speedRight, newX, newY
@@ -151,6 +153,18 @@ class Bot():
         newY = newv.item(1)
         newTheta = newv.item(2)
         newTheta = newTheta % (2.0 * math.pi)  # make sure angle doesn't go outside [0.0,2*pi)
+
+        # t3: implement the toroidal geometry ——————————————————————————————————————————————————————————————————————————
+        if newX < 0:
+            newX = 1000
+        elif newX > 1000:
+            newX = 0
+        if newY < 0:
+            newY = 1000
+        elif newY > 1000:
+            newY = 0
+        # ——————————————————————————————————————————————————————————————————————————————————————————————————————————————
+
         self.x = newX
         self.y = newY
         self.theta = newTheta
