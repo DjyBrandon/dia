@@ -19,54 +19,74 @@ class Brain():
         # t4: battery attribute of mobile robot ————————————————————————————————————————————————————————————————————————
         self.batteryLevel = 100  # initialise battery capacity
         self.seekCharger = False  # is seek charger mode ?
+        self.consumptionRate = 0.1  # battery consumption rate
         # ——————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
+    # t4: seek charger in advance ——————————————————————————————————————————————————————————————————————————————————————
+    def calculateRequiredBattery(self, distance):  # calculation the battery if it needs to arrival the light
+        return distance * self.consumptionRate
+
+    def findNearestCharger(self, passiveObjects):  # return the distance and location of the nearest charger
+        min_distance = float('inf')
+        target_charger = None
+        for obj in passiveObjects:
+            if isinstance(obj, Charger):
+                cx, cy = obj.getLocation()
+                distance = math.hypot(cx - self.bot.x, cy - self.bot.y)
+                if distance < min_distance:
+                    min_distance = distance
+                    target_charger = (cx, cy)
+        return min_distance, target_charger
+    # ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+
     # modify this to change the robot's behaviour
-    def thinkAndAct(self, lightL, lightR, x, y, sl, sr, heatL, heatR):  # t5
+    def thinkAndAct(self, lightL, lightR, x, y, sl, sr, heatL, heatR, passiveObjects):  # t5, t4
         # wheels not moving - no movement - no response to light
 
         # t4: battery attribute of mobile robot ————————————————————————————————————————————————————————————————————————
         print(f"current battery: {self.batteryLevel} %")
-        if self.bot.step_count % 5 == 0:  # battery capacity decreasing for every 5 calls
-            self.batteryLevel -= 1
+        self.batteryLevel -= 0.1   # battery consumption rate
+        distance_to_charger, charger_pos = self.findNearestCharger(passiveObjects)
         if self.batteryLevel <= 0:
             self.batteryLevel = 0
             return 0, 0, None, None  # stop move when out of battery
-        if self.batteryLevel < 30:  # seek charger when low battery
-            self.seekCharger = True
+        if charger_pos:
+            required_battery = self.calculateRequiredBattery(distance_to_charger)
+            if self.batteryLevel < (required_battery + 20):
+                self.seekCharger = True
         if self.seekCharger:  # move to the charger when at the seekCharger mode
-            chargerX, chargerY = 500, 500  # assume the position of charger is fixed
-            angle_to_charger = math.atan2(chargerY - y, chargerX - x)
-            speedLeft = 2.0 + math.sin(angle_to_charger - self.bot.theta)
-            speedRight = 2.0 - math.sin(angle_to_charger - self.bot.theta)
+            cx, cy = charger_pos  # assume the position of charger is fixed
+            angle = math.atan2(cy - y, cx - x)
+            speedLeft = 3.0 + math.sin(angle - self.bot.theta)
+            speedRight = 3.0 - math.sin(angle - self.bot.theta)
             # charge when arrive the charger
-            if abs(x - chargerX) < 10 and abs(y - chargerY) < 10:
-                self.batteryLevel += 10
-                if self.batteryLevel >= 100:
+            if math.hypot(cx - x, cy - y) < 15:
+                self.batteryLevel = min(self.batteryLevel + 2, 100)
+                if self.batteryLevel == 100:
                     self.seekCharger = False  # enough battery then quit the seek charger mode
             return speedLeft, speedRight, None, None
         # ——————————————————————————————————————————————————————————————————————————————————————————————————————————————
+        else:
+            # t1: move the mobile robot to the light, t5: second form heater ———————————————————————————————————————————
+            # speedLeft = 5
+            # speedRight = 5
+            base_speed = 2.0  # basic speed
+            light_turn_factor = 0.1  # light turn factor, close to light, -0.1 represents away from light
+            heat_turn_factor = 0.1  # heater turn factor, away from heat, 0.1 represents close to heat
+            speedLeft = base_speed + (lightR - lightL) * light_turn_factor + (heatR - heatL) * heat_turn_factor
+            speedRight = base_speed + (lightL - lightR) * light_turn_factor + (heatL - heatR) * heat_turn_factor
+            # ——————————————————————————————————————————————————————————————————————————————————————————————————————————
 
-        # t1: move the mobile robot to the light, t5: second form heater ———————————————————————————————————————————————
-        # speedLeft = 5
-        # speedRight = 5
-        base_speed = 2.0  # basic speed
-        light_turn_factor = 0.1  # light turn factor, close to light, -0.1 represents away from light
-        heat_turn_factor = 0.1  # heater turn factor, away from heat, 0.1 represents close to heat
-        speedLeft = base_speed + (lightR - lightL) * light_turn_factor + (heatR - heatL) * heat_turn_factor
-        speedRight = base_speed + (lightL - lightR) * light_turn_factor + (heatL - heatR) * heat_turn_factor
-        # ——————————————————————————————————————————————————————————————————————————————————————————————————————————————
+            # t2: restrict the speed of mobile robot ———————————————————————————————————————————————————————————————————
+            max_speed = 10.0  # max speed
+            min_speed = -10.0  # min speed
+            speedLeft = max(min(speedLeft, max_speed), min_speed)  # min <= speed <= max
+            speedRight = max(min(speedRight, max_speed), min_speed)  # min <= speed <= max
+            # ——————————————————————————————————————————————————————————————————————————————————————————————————————————
 
-        # t2: restrict the speed of mobile robot ———————————————————————————————————————————————————————————————————————
-        max_speed = 10.0  # max speed
-        min_speed = -10.0  # min speed
-        speedLeft = max(min(speedLeft, max_speed), min_speed)  # min <= speed <= max
-        speedRight = max(min(speedRight, max_speed), min_speed)  # min <= speed <= max
-        # ——————————————————————————————————————————————————————————————————————————————————————————————————————————————
-
-        newX = None
-        newY = None
-        return speedLeft, speedRight, newX, newY
+            newX = None
+            newY = None
+            return speedLeft, speedRight, newX, newY
 
 
 class Bot():
@@ -80,18 +100,16 @@ class Bot():
         self.ll = 60  # axle width
         self.sl = 0.0
         self.sr = 0.0
-        self.step_count = 0  # t4: add step count
 
     def thinkAndAct(self, agents, passiveObjects):
         lightL, lightR = self.senseLight(passiveObjects)
         heatL, heatR = self.senseHeat(passiveObjects)  # t5
         self.sl, self.sr, xx, yy = self.brain.thinkAndAct(lightL, lightR, self.x, self.y, self.sl, self.sr, heatL,
-                                                          heatR)  # t5
+                                                          heatR, passiveObjects)  # t5
         if xx != None:
             self.x = xx
         if yy != None:
             self.y = yy
-        self.step_count += 1  # t4: add step count
 
     def setBrain(self, brainp):
         self.brain = brainp
@@ -272,8 +290,6 @@ class Heater():
 
     def getLocation(self):
         return self.centreX, self.centreY
-
-
 # ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
 
@@ -332,10 +348,10 @@ def moveIt(canvas, agents, passiveObjects):
 
 def main():
     window = tk.Tk()
-    canvas = initialise(window)  # •	Creates a window to display the scene
+    canvas = initialise(window)  # Creates a window to display the scene
     # This consists of two lists. agents is a list of things that move (e.g. robots),
     # and passiveObjects is a list of things that don’t move (e.g. lights, charging stations, barriers)
-    agents, passiveObjects = createObjects(canvas, noOfBots=1, noOfLights=1, noOfChargers=1, noOfHeaters=1)  # t4, t5
+    agents, passiveObjects = createObjects(canvas, noOfBots=3, noOfLights=3, noOfChargers=3, noOfHeaters=4)  # t4, t5
     moveIt(canvas, agents, passiveObjects)
     window.mainloop()  # update the windows
 
