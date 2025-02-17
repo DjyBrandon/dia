@@ -27,6 +27,13 @@ class Brain():
         speedLeft = base_speed + (lightR - lightL) * turn_factor
         speedRight = base_speed + (lightL - lightR) * turn_factor
         # ——————————————————————————————————————————————————————————————————————————————————————————————————————————————
+
+        # t2: restrict the speed of mobile robot ———————————————————————————————————————————————————————————————————————
+        max_speed = 10.0  # max speed
+        min_speed = -10.0  # min speed
+        speedLeft = max(min(speedLeft, max_speed), min_speed)  # min <= speed <= max
+        speedRight = max(min(speedRight, max_speed), min_speed)  # min <= speed <= max
+        # ——————————————————————————————————————————————————————————————————————————————————————————————————————————————
         newX = None
         newY = None
         return speedLeft, speedRight, newX, newY
