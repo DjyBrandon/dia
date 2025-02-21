@@ -39,13 +39,27 @@ class Brain():
         return min_distance, target_charger
     # ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
+    # ex: collect dust —————————————————————————————————————————————————————————————————————————————————————————————————
+    def collectDust(self, passiveObjects):
+        dust_to_remove = []
+        for obj in passiveObjects:
+            if isinstance(obj, Dust) and not obj.collected:
+                dx, dy = obj.getLocation()
+                distance = math.hypot(dx - self.bot.x, dy - self.bot.y)
+                if distance < 20:  # 如果靠近灰尘
+                    obj.collected = True
+                    dust_to_remove.append(obj)
+        for dust in dust_to_remove:
+            passiveObjects.remove(dust)
+    # ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+
     # modify this to change the robot's behaviour
     def thinkAndAct(self, lightL, lightR, x, y, sl, sr, heatL, heatR, passiveObjects):  # t5, t4
         # wheels not moving - no movement - no response to light
 
         # t4: battery attribute of mobile robot ————————————————————————————————————————————————————————————————————————
-        print(f"current battery: {round(self.batteryLevel, 1)} %")
-        self.batteryLevel -= 0.1   # battery consumption rate
+        # print(f"current battery: {round(self.batteryLevel, 1)} %")
+        self.batteryLevel -= 0.1  # battery consumption rate
         distance_to_charger, charger_pos = self.findNearestCharger(passiveObjects)
         if self.batteryLevel <= 0:
             self.batteryLevel = 0
@@ -103,6 +117,7 @@ class Bot():
         self.sr = 0.0
 
     def thinkAndAct(self, agents, passiveObjects):
+        self.brain.collectDust(passiveObjects)  # ex: collect dust
         lightL, lightR = self.senseLight(passiveObjects)
         heatL, heatR = self.senseHeat(passiveObjects)  # t5
         self.sl, self.sr, xx, yy = self.brain.thinkAndAct(lightL, lightR, self.x, self.y, self.sl, self.sr, heatL,
@@ -274,7 +289,7 @@ class Charger():
 # ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
 
-# t5: second form heater ————————————————————————————————————————————————————————————————————————————————
+# t5: second form heater ———————————————————————————————————————————————————————————————————————————————————————————————
 class Heater():
     def __init__(self, namep):
         self.centreX = random.randint(100, 900)
@@ -285,6 +300,25 @@ class Heater():
         body = canvas.create_oval(self.centreX - 10, self.centreY - 10, \
                                   self.centreX + 10, self.centreY + 10, \
                                   fill="red", tags=self.name)
+
+    def getLocation(self):
+        return self.centreX, self.centreY
+# ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+
+
+# ex: dust collected ———————————————————————————————————————————————————————————————————————————————————————————————————
+class Dust():
+    def __init__(self, namep):
+        self.centreX = random.randint(100, 900)
+        self.centreY = random.randint(100, 900)
+        self.name = namep
+        self.collected = False
+
+    def draw(self, canvas):
+        if not self.collected:
+            canvas.create_oval(self.centreX - 5, self.centreY - 5,
+                               self.centreX + 5, self.centreY + 5,
+                               fill="brown", tags=self.name)
 
     def getLocation(self):
         return self.centreX, self.centreY
@@ -305,7 +339,7 @@ def buttonClicked(x, y, agents):
             rr.y = y
 
 
-def createObjects(canvas, noOfBots, noOfLights, noOfChargers, noOfHeaters):  # t4, t5
+def createObjects(canvas, noOfBots, noOfLights, noOfChargers, noOfHeaters, noOfDusts):  # t4, t5, ex
     agents = []
     passiveObjects = []
     for i in range(0, noOfBots):
@@ -322,15 +356,22 @@ def createObjects(canvas, noOfBots, noOfLights, noOfChargers, noOfHeaters):  # t
     # t4: battery attribute of mobile robot ————————————————————————————————————————————————————————————————————————————
     for i in range(0, noOfChargers):
         charger = Charger("Charger" + str(i))
-        passiveObjects.append(Charger)
+        passiveObjects.append(charger)
         charger.draw(canvas)
     # ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
     # t5: second form heater ———————————————————————————————————————————————————————————————————————————————————————————
     for i in range(0, noOfHeaters):
         heater = Heater("Heater" + str(i))
-        passiveObjects.append(Heater)
+        passiveObjects.append(heater)
         heater.draw(canvas)
+    # ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————
+
+    # ex: collect dust —————————————————————————————————————————————————————————————————————————————————————————————————
+    for i in range(0, noOfDusts):
+        dust = Dust("Dust" + str(i))
+        passiveObjects.append(dust)
+        dust.draw(canvas)
     # ——————————————————————————————————————————————————————————————————————————————————————————————————————————————————
 
     canvas.bind("<Button-1>", lambda event: buttonClicked(event.x, event.y, agents))
@@ -338,6 +379,9 @@ def createObjects(canvas, noOfBots, noOfLights, noOfChargers, noOfHeaters):  # t
 
 
 def moveIt(canvas, agents, passiveObjects):
+    canvas.delete("all")  # ex
+    for obj in passiveObjects:  # ex
+        obj.draw(canvas)  # ex
     for rr in agents:
         rr.thinkAndAct(agents, passiveObjects)
         rr.update(canvas, 1.0)
@@ -349,7 +393,8 @@ def main():
     canvas = initialise(window)  # Creates a window to display the scene
     # This consists of two lists. agents is a list of things that move (e.g. robots),
     # and passiveObjects is a list of things that don’t move (e.g. lights, charging stations, barriers)
-    agents, passiveObjects = createObjects(canvas, noOfBots=3, noOfLights=3, noOfChargers=3, noOfHeaters=4)  # t4, t5
+    agents, passiveObjects = createObjects(canvas, noOfBots=3, noOfLights=3, noOfChargers=3, noOfHeaters=4,
+                                           noOfDusts=5)  # t4, t5, ex
     moveIt(canvas, agents, passiveObjects)
     window.mainloop()  # update the windows
 
