@@ -29,12 +29,32 @@ class Brain():
         yMapPosition = max(0, min(yMapPosition, 9))
         self.map[xMapPosition][yMapPosition] = 1
 
+    def fineNearestUnexplored(self, x, y):
+        min_dist = float('inf')
+        newX, newY = None, None
+        for i in range(10):
+            for j in range(10):
+                is_explored = self.map[i][j] == 1
+                if not is_explored:
+                    center_x = i * 100 + 50
+                    center_y = j * 100 + 50
+                    dist = math.hypot(center_x - x, center_y - y)
+                    if dist < min_dist:
+                        min_dist = dist
+                        newX, newY = center_x, center_y
+        return newX, newY
+
     # modify this to change the robot's behaviour
-    def thinkAndAct(self, lightL, lightR, chargerL, chargerR, x, y, sl, sr, battery):
+    def thinkAndAct(self, lightL, lightR, chargerL, chargerR, areaL, areaR, x, y, sl, sr, battery):
         newX = None
         newY = None
 
-        print(self.map)
+        if areaL > areaR:
+            speedLeft = 2.0
+            speedRight = -2.0
+        elif areaL < areaR:
+            speedLeft = -2.0
+            speedRight = 2.0
 
         # wandering behaviour
         if self.currentlyTurning == True:
@@ -96,8 +116,9 @@ class Bot():
     def thinkAndAct(self, agents, passiveObjects):
         lightL, lightR = self.senseLight(passiveObjects)
         chargerL, chargerR = self.senseChargers(passiveObjects)
+        areaL, areaR = self.senseArea()
         self.sl, self.sr, xx, yy = self.brain.thinkAndAct \
-            (lightL, lightR, chargerL, chargerR, self.x, self.y, self.sl, self.sr, self.battery)
+            (lightL, lightR, chargerL, chargerR, areaL, areaR, self.x, self.y, self.sl, self.sr, self.battery)
         if xx != None:
             self.x = xx
         if yy != None:
@@ -105,6 +126,18 @@ class Bot():
 
     def setBrain(self, brainp):
         self.brain = brainp
+
+    def senseArea(self):  # explore unknown area
+        areaL = 0.0
+        areaR = 0.0
+        newX, newY = self.brain.fineNearestUnexplored(self.x, self.y)
+        distanceL = math.sqrt((newX - self.sensorPositions[0]) * (newX - self.sensorPositions[0]) + \
+                              (newY - self.sensorPositions[1]) * (newY - self.sensorPositions[1]))
+        distanceR = math.sqrt((newX - self.sensorPositions[2]) * (newX - self.sensorPositions[2]) + \
+                              (newY - self.sensorPositions[3]) * (newY - self.sensorPositions[3]))
+        areaL += 200000 / (distanceL * distanceL)
+        areaR += 200000 / (distanceR * distanceR)
+        return areaL, areaR
 
     # returns the output from polling the light sensors
     def senseLight(self, passiveObjects):
@@ -202,13 +235,16 @@ class Bot():
                            fill="yellow", tags=self.name)
 
     def drawMap(self, canvas):
-        for xx in range(10):
+        color = "pink" if self.name == "Bot0" else "lightblue"  # 可选区分颜色
+        for xx in range(10):  # 绘制新的地图
             for yy in range(10):
                 if self.brain.map[xx][yy] == 1:
-                    canvas.create_rectangle(100 * xx, 100 * yy,
-                                            100 * xx + 100, 100 * yy + 100,
-                                            fill="pink", width=0, tags="map")
-        canvas.tag_lower("map")
+                    canvas.create_rectangle(
+                        100 * xx, 100 * yy,
+                        100 * xx + 100, 100 * yy + 100,
+                        fill=color, width=0, tags=f"map_{self.name}"  # 使用机器人名称作为标签
+                    )
+        canvas.tag_lower(f"map_{self.name}")  # 确保地图在底层
 
     # handles the physics of the movement
     # cf. Dudek and Jenkin, Computational Principles of Mobile Robotics
