@@ -464,6 +464,7 @@ class Bot(CanvasObject):
         The rectangles are drawn in a grid pattern, and the border lines are drawn using specific
         coordinates from the configuration.
         """
+        self.canvas.delete("map")
         for xx in range(10):
             for yy in range(10):
                 if self.map[xx][yy] == 1:
