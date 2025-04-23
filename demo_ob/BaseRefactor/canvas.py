@@ -24,6 +24,12 @@ def initialize(window):
         height=Config.CANVAS_HEIGHT.value,
     )
     canvas.pack()
+    canvas.create_rectangle(
+                        300 , 300,
+                        400 , 400,
+                        fill="green", width=0, tags="item1"
+                    )
+
     return canvas
 
 

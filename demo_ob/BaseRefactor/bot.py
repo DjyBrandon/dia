@@ -368,10 +368,18 @@ class Bot(CanvasObject):
             temp_x = self.x + avg_speed * math.cos(self.theta) * dt * lookahead
             temp_y = self.y + avg_speed * math.sin(self.theta) * dt * lookahead
             dynamic_buffer = self.boundary_buffer + abs(avg_speed) * 2
+            
             if (temp_x < Config.BOT_X_MIN.value - dynamic_buffer or
                     temp_x > Config.BOT_X_MAX.value + dynamic_buffer or
                     temp_y < Config.BOT_Y_MIN.value - dynamic_buffer or
-                    temp_y > Config.BOT_Y_MAX.value + dynamic_buffer):
+                    temp_y > Config.BOT_Y_MAX.value + dynamic_buffer or
+
+            
+                    ((300 - dynamic_buffer < temp_x < 400 + dynamic_buffer) and
+                    (300 - dynamic_buffer < temp_y < 400 + dynamic_buffer))
+        
+                    
+                    ):
                 self.init_boundary_turn()
                 return
 
