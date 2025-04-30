@@ -1,8 +1,6 @@
 from enum import Enum
 import math
 
-import numpy as np
-
 
 class Config(Enum):
     """Configuration settings for the simulation."""
@@ -23,7 +21,7 @@ class Config(Enum):
     BOT_Y_MAX = 900  
     BOT_THETA_MIN = 0.0  
     BOT_THETA_MAX = 2.0 * math.pi  
-    BOT_MOVES_MAX = 1000  
+    BOT_MOVES_MAX = 500
 
     CHARGER_X_MIN = 100  
     CHARGER_X_MAX = 900  

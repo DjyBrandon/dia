@@ -1,12 +1,17 @@
 import math
 import random
+from typing import Tuple
+
 import numpy as np
 import heapq
+
+from BaseRefactor.strategy import Strategy
 from canvas_object import CanvasObject
 from charger import Charger
 from config import Config
 from dirt import Dirt
 from cat import Cat
+
 
 class Bot(CanvasObject):
     def __init__(self, name, canvas_p, dirt_list):
@@ -20,28 +25,35 @@ class Bot(CanvasObject):
         """
         super().__init__()
         self.name = name
-        self.x = random.randint(Config.BOT_X_MIN.value, Config.BOT_X_MAX.value)
-        self.y = random.randint(Config.BOT_Y_MIN.value, Config.BOT_Y_MAX.value)
-        self.canvas = canvas_p  
+        self.x, self.y = self.generate_random_position()
+        # self.x = random.randint(Config.BOT_X_MIN.value, Config.BOT_X_MAX.value)
+        # self.y = random.randint(Config.BOT_Y_MIN.value, Config.BOT_Y_MAX.value)
+        self.canvas = canvas_p
         self.map = np.zeros((Config.MAP_WIDTH.value, Config.MAP_HEIGHT.value))
-        self.sensor_positions = None  
+        self.sensor_positions = None
         self.theta = random.uniform(Config.BOT_THETA_MIN.value, Config.BOT_THETA_MAX.value)
-        self.ll = 60  
-        self.vl = 0.0 
-        self.vr = 0.0  
+        self.ll = 60
+        self.vl = 0.0
+        self.vr = 0.0
         self.battery = Config.BOT_BATTERY_CAPACITY.value
 
-        self.turning = 0  
-        self.moving = random.randrange(50, 100)  
+        self.turning = 0
+        self.moving = random.randrange(50, 100)
         self.currently_turning = False
 
         self.is_turning = False
         self.boundary_turn_count = 0
-        self.boundary_buffer = 20 
-        self.brain_strategy = self.a_star_strategy
+        self.boundary_buffer = 20
+
+        self.dirt_list = dirt_list
+        self.strategy = Strategy(dirt_list)  # 初始化策略类
+        self.brain_strategy = self.strategy.a_star_strategy  # 使用策略类的方法
         self.a_star_path = []
         self.a_star_target = None
-        self.dirt_list = dirt_list
+
+        # self.path_history = []  # 新增：存储轨迹坐标的列表
+        # self.path_color = "#FF5722"  # 轨迹颜色（橙色）
+        # self.path_max_length = 1000  # 轨迹最大长度（避免内存溢出）
 
     def brain(self, charger_l, charger_r):
         """
@@ -54,183 +66,30 @@ class Bot(CanvasObject):
             charger_l (float): Sensor reading from the left charger detector.
             charger_r (float): Sensor reading from the right charger detector.
         """
-        self.brain_strategy(charger_l, charger_r)
+        self.brain_strategy(self, charger_l, charger_r)
 
-    def random_walk_strategy(self, charger_l, charger_r):
+
+    @staticmethod
+    def generate_random_position() -> tuple[int, int] | None:
         """
-        Execute a random walk strategy for robot movement.
-
-        This method alternates between forward motion and timed turns to simulate random exploration.
-        It adjusts behavior when the battery level is low by orienting the robot towards the charger
-        based on sensor readings. The robot stops moving when a strong charging signal is detected.
-
-        Args:
-            charger_l (float): Sensor reading from the left charger detector.
-            charger_r (float): Sensor reading from the right charger detector.
+        生成一个不在任何障碍物范围内的随机位置
+        :return: (x, y) 坐标元组
+        :raises RuntimeError: 如果无法在尝试次数内找到有效位置
         """
-        if self.is_turning:
-            return
-        if self.currently_turning:
-            self.vl = -2.0  
-            self.vr = 2.0   
-            self.turning -= 1  
-        else:
-            self.vl = 5.0  
-            self.vr = 5.0
-            self.moving -= 1  
+        def is_valid_position(x: int, y: int) -> bool:
+            """检查坐标是否在任何障碍物内"""
+            if ((280 <= x <= 420 and 280 <= y <= 520)
+            or (580 <= x <= 720 and 280 <= y <= 420)
+            or (480 <= x <= 620 and 680 <= y <= 820)):
+                    return False
+            return True
 
-        if self.moving == 0 and not self.currently_turning:
-            self.turning = random.randrange(20, 40)  
-            self.currently_turning = True
+        for _ in range(1000):
+            x = random.randint(Config.BOT_X_MIN.value, Config.BOT_X_MAX.value)
+            y = random.randint(Config.BOT_Y_MIN.value, Config.BOT_Y_MAX.value)
+            if is_valid_position(x, y):
+                return x, y
 
-        if self.turning == 0 and self.currently_turning:
-            self.moving = random.randrange(50, 100)
-            self.currently_turning = False
-
-        if self.battery < 800:
-            if charger_r > charger_l:
-                self.vl = 2.0
-                self.vr = -2.0
-            elif charger_r < charger_l:
-                self.vl = -2.0
-                self.vr = 2.0
-            if abs(charger_r - charger_l) < charger_l * 0.1:
-                self.vl = 5.0
-                self.vr = 5.0
-
-        if charger_l + charger_r > 200 and self.battery < Config.BOT_BATTERY_CAPACITY.value:
-            self.vl = 0.0
-            self.vr = 0.0
-
-    def a_star_strategy(self, charger_l, charger_r):
-        """
-        Execute an A* pathfinding strategy for robot navigation.
-
-        This method directs the robot to seek a charging station when the battery is low,
-        using sensor readings to orient towards the charger. Otherwise, it computes or follows
-        an A* path to the nearest dirt cell in the occupancy grid. The robot adjusts its wheel
-        speeds to orient and move toward each waypoint, and resets the target once reached.
-
-        Args:
-            charger_l (float): Sensor reading from the left charger detector.
-            charger_r (float): Sensor reading from the right charger detector.
-        """
-        if self.battery < 800:
-            if charger_r > charger_l:
-                self.vl, self.vr = 2.0, -2.0
-            elif charger_r < charger_l:
-                self.vl, self.vr = -2.0, 2.0
-            elif abs(charger_r - charger_l) < charger_l * 0.1:
-                self.vl, self.vr = 5.0, 5.0
-            return
-
-        if self.is_turning:
-            return
-
-        cell_size = Config.CELL_SIZE.value
-        curr_col = int(self.x // cell_size)
-        curr_row = int(self.y // cell_size)
-        current_grid = (curr_col, curr_row)
-
-        if self.a_star_target is None:
-            self.a_star_target = self.find_nearest_dirt(self.dirt_list, current_grid)
-            if self.a_star_target is None:
-                self.vl = self.vr = 0.0
-                return
-            self.a_star_path.clear()
-
-        if not self.a_star_path or self.a_star_path[0] != current_grid:
-            self.a_star_path = self.compute_a_star_path(current_grid, self.a_star_target)
-
-        if self.a_star_path:
-            next_cell = self.a_star_path[0]
-            target_x = next_cell[0] * cell_size + cell_size / 2
-            target_y = next_cell[1] * cell_size + cell_size / 2
-
-            desired_angle = math.atan2(target_y - self.y, target_x - self.x)
-            angle_diff = (desired_angle - self.theta + math.pi) % (2 * math.pi) - math.pi
-
-            if abs(angle_diff) < 0.1:
-                self.vl = self.vr = 5.0
-            elif angle_diff > 0:
-                self.vl, self.vr = 2.0, 5.0
-            else:
-                self.vl, self.vr = 5.0, 2.0
-
-            threshold = max(5, (self.vl + self.vr) / 2 * 1.2)
-            if math.hypot(self.x - target_x, self.y - target_y) < threshold:
-                self.a_star_path.pop(0)
-                if not self.a_star_path:
-                    self.a_star_target = None
-        else:
-            self.vl = self.vr = 5.0
-    
-    def find_nearest_dirt(self, dirt_list, current_grid):
-        """
-        Find the nearest dirt cell to the current grid position.
-
-        Args:
-            dirt_list (list): A list of dirt objects with x and y attributes.
-            current_grid (tuple): The current grid coordinates (col, row).
-
-        Returns:
-            tuple: The grid coordinates (col, row) of the nearest dirt cell, or None if no dirt is found.
-        """
-        if not self.dirt_list:
-            return None
-        dirt_positions = [(int(d.x // Config.CELL_SIZE.value), int(d.y // Config.CELL_SIZE.value)) for d in self.dirt_list]
-        dirt_positions.sort(key=lambda pos: abs(pos[0] - current_grid[0]) + abs(pos[1] - current_grid[1]))
-        return dirt_positions[0]
-
-    def compute_a_star_path(self, start, goal):
-        """
-        Compute the shortest path from start to goal using the A* algorithm.
-
-        Args:
-            start (tuple): The starting grid coordinates (x, y).
-            goal (tuple): The goal grid coordinates (x, y).
-
-        Returns:
-            list: A list of grid coordinates representing the path from start to goal.
-        """
-        cols, rows = Config.MAP_WIDTH.value, Config.MAP_HEIGHT.value
-        obstacles = {(x, y) for x in range(cols) for y in range(rows)
-                    if x == 0 or y == 0 or x == cols - 1 or y == rows - 1}
-
-        def heuristic(a, b):
-            return abs(a[0] - b[0]) + abs(a[1] - b[1])
-
-        open_heap = [] 
-        heapq.heappush(open_heap, (0 + heuristic(start, goal), 0, start))
-        came_from = {}
-        g_score = {start: 0}
-        closed_set = set()
-
-        while open_heap:
-            _, current_g, current = heapq.heappop(open_heap)
-
-            if current == goal:
-                path = []
-                while current in came_from:
-                    path.append(current)
-                    current = came_from[current]
-                path.reverse()
-                return path
-
-            closed_set.add(current)
-
-            for dx, dy in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
-                neighbor = (current[0] + dx, current[1] + dy)
-                if (0 <= neighbor[0] < cols and 0 <= neighbor[1] < rows and
-                        neighbor not in obstacles and neighbor not in closed_set):
-                    tentative_g = current_g + 1
-
-                    if neighbor not in g_score or tentative_g < g_score[neighbor]:
-                        came_from[neighbor] = current
-                        g_score[neighbor] = tentative_g
-                        f_score = tentative_g + heuristic(neighbor, goal)
-                        heapq.heappush(open_heap, (f_score, tentative_g, neighbor))
-        return []
 
     def avoid_cats(self, cat_list):
         """
@@ -238,20 +97,20 @@ class Bot(CanvasObject):
         perpendicular to the threat vector, ensuring safe avoidance behavior.
         """
         base_speed = 8.0
-    
+
         for cat in cat_list:
+            print(f"cat: {cat}")
             distance = self.distance_to(cat)
             if distance < Config.CAT_AVOID_DISTANCE.value:
-                
                 threat_vector = (cat.x - self.x, cat.y - self.y)
                 threat_angle = math.atan2(threat_vector[1], threat_vector[0])
-                current_angle = self.theta 
+                current_angle = self.theta
                 escape_angle = threat_angle + math.pi / 2
                 angle_diff = (escape_angle - current_angle + math.pi) % (2 * math.pi) - math.pi
                 turn_ratio = np.clip(angle_diff / math.pi, -1, 1) * 1.5
                 self.vl = base_speed * (1 - turn_ratio)
                 self.vr = base_speed * (1 + turn_ratio)
-                
+
     def draw(self, canvas):
         """
         Render the robot on the canvas, including its body, wheels, sensors, and battery level.
@@ -356,6 +215,11 @@ class Bot(CanvasObject):
         - Updates robot's position and orientation according to its wheel velocities and turn rates.
         - Redraws the robot's updated position on the canvas.
         """
+        # 更新机器人坐标后记录轨迹点
+        # if len(self.path_history) > self.path_max_length:
+        #     self.path_history.pop(0)  # 删除最旧的点，控制内存
+        # self.path_history.append((self.x, self.y))  # 记录当前坐标
+
         if self.battery > 0:
             self.battery -= 1
         if self.battery == 0:
@@ -364,22 +228,24 @@ class Bot(CanvasObject):
 
         if not self.is_turning:
             avg_speed = (self.vl + self.vr) / 2
-            lookahead = 5 
+            lookahead = 5
             temp_x = self.x + avg_speed * math.cos(self.theta) * dt * lookahead
             temp_y = self.y + avg_speed * math.sin(self.theta) * dt * lookahead
             dynamic_buffer = self.boundary_buffer + abs(avg_speed) * 2
-            
+
             if (temp_x < Config.BOT_X_MIN.value - dynamic_buffer or
                     temp_x > Config.BOT_X_MAX.value + dynamic_buffer or
                     temp_y < Config.BOT_Y_MIN.value - dynamic_buffer or
                     temp_y > Config.BOT_Y_MAX.value + dynamic_buffer or
 
-            
                     ((300 - dynamic_buffer < temp_x < 400 + dynamic_buffer) and
-                    (300 - dynamic_buffer < temp_y < 400 + dynamic_buffer))
-        
-                    
-                    ):
+                     (300 - dynamic_buffer < temp_y < 500 + dynamic_buffer)) or
+                    ((600 - dynamic_buffer < temp_x < 700 + dynamic_buffer) and
+                     (300 - dynamic_buffer < temp_y < 400 + dynamic_buffer)) or
+                    ((500 - dynamic_buffer < temp_x < 600 + dynamic_buffer) and
+                     (700 - dynamic_buffer < temp_y < 800 + dynamic_buffer))
+
+            ):
                 self.init_boundary_turn()
                 return
 
@@ -410,7 +276,8 @@ class Bot(CanvasObject):
             return
 
         for rr in registry_passives:
-            if isinstance(rr, Charger) and self.distance_to(rr) < Config.CHARGER_DISTANCE.value and self.battery < Config.BOT_BATTERY_CAPACITY.value:
+            if isinstance(rr, Charger) and self.distance_to(
+                    rr) < Config.CHARGER_DISTANCE.value and self.battery < Config.BOT_BATTERY_CAPACITY.value:
                 self.battery += 10
 
         cat_list = [rr for rr in registry_passives if isinstance(rr, Cat)]
@@ -493,7 +360,7 @@ class Bot(CanvasObject):
         )
         self.canvas.create_line(
             Config.BOT_X_MIN.value, Config.BOT_Y_MIN.value,
-            Config.BOT_X_MIN.value, Config.BOT_Y_MAX.value, 
+            Config.BOT_X_MIN.value, Config.BOT_Y_MAX.value,
             fill="red", width=2, tags="border"
         )
 
@@ -502,7 +369,26 @@ class Bot(CanvasObject):
             Config.BOT_X_MAX.value, Config.BOT_Y_MAX.value,
             fill="red", width=2, tags="border"
         )
-        self.canvas.tag_lower("map") 
+        self.canvas.tag_lower("map")
+
+        # 删除旧轨迹
+        # self.canvas.delete("bot_path")
+
+        # if len(self.path_history) >= 2:
+        #     # 将轨迹点转换为画布坐标序列 [x1,y1, x2,y2,...]
+        #     path_points = []
+        #     for x, y in self.path_history:
+        #         path_points.extend([x, y])
+        #
+        #     # 绘制轨迹线（半透明橙色，宽度渐变）
+        #     self.canvas.create_line(
+        #         *path_points,
+        #         fill=self.path_color,
+        #         width=2,
+        #         tags="bot_path",
+        #         stipple="gray50",  # 可选：虚线样式
+        #         smooth=True  # 曲线平滑
+        #     )
 
     def sense_charger(self, registry_passives):
         """
@@ -609,6 +495,7 @@ class Bot(CanvasObject):
         elif self.battery > Config.BOT_BATTERY_CAPACITY.value:
             self.battery = Config.BOT_BATTERY_CAPACITY.value
 
+
     def init_boundary_turn(self):
         """
         Initializes a boundary turn when the robot approaches the edge of the defined area.
@@ -633,12 +520,12 @@ class Bot(CanvasObject):
             self.vl = turn_speed
             self.vr = -turn_speed
         else:
-            self.vl = -turn_speed 
+            self.vl = -turn_speed
             self.vr = turn_speed
 
         omega = abs((self.vl - self.vr) / self.ll)
         required_frames = math.ceil(math.pi / omega)
-        self.boundary_turn_count = required_frames + 3 
+        self.boundary_turn_count = required_frames + 3
 
         self.x = np.clip(self.x,
                          Config.BOT_X_MIN.value + 50,

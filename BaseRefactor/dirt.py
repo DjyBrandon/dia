@@ -21,8 +21,11 @@ class Dirt(CanvasObject):
             self.y = random.randint(Config.DIRT_Y_MIN.value, Config.DIRT_Y_MAX.value)
 
             # 如果生成的位置不在障碍区域内，就跳出循环
-            if not (290 <= self.x <= 410 and 290 <= self.y <= 410):
+            if not ((290 <= self.x <= 410 and 290 <= self.y <= 510)
+            or (590 <= self.x <= 710 and 290 <= self.y <= 410)
+            or (490 <= self.x <= 610 and 690 <= self.y <= 810)):
                 break
+
     def draw(self, canvas):
         """
         Draws the dirt object on the provided canvas.
